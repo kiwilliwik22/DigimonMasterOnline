@@ -1,4 +1,4 @@
-﻿using AutoMapper;
+using AutoMapper;
 using DigitalWorldOnline.Application;
 using DigitalWorldOnline.Application.Separar.Commands.Delete;
 using DigitalWorldOnline.Application.Separar.Commands.Update;
@@ -46,38 +46,38 @@ namespace DigitalWorldOnline.Game.PacketProcessors
         {
             var packet = new GamePacketReader(packetData);
 
-            _logger.Debug($"Getting parameters...");
+            _logger.Information($"Getting parameters...");
             packet.Skip(4);
             var handler = packet.ReadInt();
 
-            _logger.Debug($"{handler}");
+            _logger.Information($"{handler}");
 
-            _logger.Debug($"Searching consigned shop with handler {handler}...");
+            _logger.Information($"Searching consigned shop with handler {handler}...");
             var consignedShop = _mapper.Map<ConsignedShop>(await _sender.Send(new ConsignedShopByHandlerQuery(handler)));
 
             if (consignedShop == null)
             {
                 _logger.Warning($"Consigned shop not found with handler {handler}.");
-                _logger.Debug($"Sending consigned shop items view packet...");
+                _logger.Information($"Sending consigned shop items view packet...");
                 client.Send(new ConsignedShopItemsViewPacket());
 
-                _logger.Debug($"Sending unload consigned shop packet...");
+                _logger.Information($"Sending unload consigned shop packet...");
                 _mapServer.BroadcastForTamerViewsAndSelf(client.TamerId, new UnloadConsignedShopPacket(handler).Serialize());
                 return;
             }
 
-            _logger.Debug($"Searching consigned shop owner with id {consignedShop.CharacterId}...");
+            _logger.Information($"Searching consigned shop owner with id {consignedShop.CharacterId}...");
             var shopOwner = _mapper.Map<CharacterModel>(await _sender.Send(new CharacterAndItemsByIdQuery(consignedShop.CharacterId)));
 
             if (shopOwner == null || shopOwner.ConsignedShopItems.Count == 0)
             {
-                _logger.Debug($"Deleting consigned shop...");
+                _logger.Information($"Deleting consigned shop...");
                 await _sender.Send(new DeleteConsignedShopCommand(handler));
 
-                _logger.Debug($"Sending consigned shop items view packet...");
+                _logger.Information($"Sending consigned shop items view packet...");
                 client.Send(new ConsignedShopItemsViewPacket());
 
-                _logger.Debug($"Sending unload consigned shop packet...");
+                _logger.Information($"Sending unload consigned shop packet...");
                 _mapServer.BroadcastForTamerViewsAndSelf(client.TamerId, new UnloadConsignedShopPacket(handler).Serialize());
                 return;
             }
@@ -91,12 +91,13 @@ namespace DigitalWorldOnline.Game.PacketProcessors
                 {
                     item.SetItemId();
                     shopOwner.ConsignedShopItems.CheckEmptyItems();
-                    _logger.Debug($"Updating consigned shop item list...");
+                    _logger.Information($"Updating consigned shop item list...");
                     await _sender.Send(new UpdateItemsCommand(shopOwner.ConsignedShopItems));
+                    _mapServer.BroadcastForTamerViewsAndSelf(client.TamerId, new ConsignedShopItemsViewPacket(consignedShop, shopOwner.ConsignedShopItems, shopOwner.Name).Serialize());
                 }
             }
 
-            _logger.Debug($"Sending consigned shop item list view packet...");
+            _logger.Information($"Sending consigned shop item list view packet...");
             client.Send(new ConsignedShopItemsViewPacket(consignedShop, shopOwner.ConsignedShopItems, shopOwner.Name));
         }
     }

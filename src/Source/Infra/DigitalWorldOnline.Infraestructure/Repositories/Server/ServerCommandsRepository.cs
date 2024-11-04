@@ -1,4 +1,4 @@
-﻿using AutoMapper;
+using AutoMapper;
 using DigitalWorldOnline.Commons.Models.Mechanics;
 using DigitalWorldOnline.Commons.Models.Servers;
 using DigitalWorldOnline.Commons.Models.TamerShop;
@@ -28,33 +28,89 @@ namespace DigitalWorldOnline.Infraestructure.Repositories.Server
 
         public async Task<ConsignedShopDTO?> AddConsignedShopAsync(ConsignedShop personalShop)
         {
+            // Mapping dari entity ke DTO
             var dto = _mapper.Map<ConsignedShopDTO>(personalShop);
 
-            var latestItem = await _context.CharacterConsignedShop
-                     .AsNoTracking()
-                     .Include(x => x.Location)
-                     .OrderByDescending(x => x.Id)
-                     .FirstOrDefaultAsync();
-
-            if(latestItem != null)
+            try
             {
-                dto.SetGeneralHandler(latestItem.Id);
+                // Mendapatkan item terakhir dari tabel CharacterConsignedShop
+                var latestItem = await _context.CharacterConsignedShop
+                    .AsNoTracking()
+                    .Include(x => x.Location)
+                    .OrderByDescending(x => x.Id)
+                    .FirstOrDefaultAsync();
+
+                // Jika item ditemukan, set handler berdasarkan ID terakhir
+                if (latestItem != null)
+                {
+                    dto.SetGeneralHandler(latestItem.Id);
+                }
+                else
+                {
+                    // Jika tidak ada item, reset nilai ID di tabel terkait menggunakan DBCC CHECKIDENT
+                    // Gunakan transaksi untuk memastikan perubahan konsisten
+                    using (var transaction = _context.Database.BeginTransaction())
+                    {
+                        try
+                        {
+                            // Logging reset identity untuk ConsignedShop
+                            Console.WriteLine("Resetting identity for DSO.Shop.ConsignedShop");
+
+                            _context.Database.ExecuteSqlRaw("DBCC CHECKIDENT('DSO.Shop.ConsignedShop', RESEED, 0)");
+
+                            // Logging reset identity untuk Location
+                            Console.WriteLine("Resetting identity for DSO.Shop.Location");
+
+                            _context.Database.ExecuteSqlRaw("DBCC CHECKIDENT('DSO.Shop.Location', RESEED, 0)");
+
+                            // Commit transaction
+                            transaction.Commit();
+
+                            // Logging sukses
+                            Console.WriteLine("Successfully reset identity for both tables.");
+                        }
+                        catch (Exception ex)
+                        {
+                            // Rollback jika ada kesalahan
+                            transaction.Rollback();
+                            Console.WriteLine($"Error during DBCC CHECKIDENT execution: {ex.Message}");
+                        }
+
+                        // Set handler ke default karena tidak ada item
+                        dto.SetGeneralHandler();
+                    }
+                }
+
+                // Tambahkan entitas DTO ke DbContext untuk diinsert ke database
+                _context.CharacterConsignedShop.Add(dto);
+
+                // Pastikan entitas dalam status 'Added'
+                _context.Entry(dto).State = EntityState.Added;
+
+                // Simpan perubahan ke database
+                await _context.SaveChangesAsync();
+
+                // Logging sukses
+                Console.WriteLine("ConsignedShop added successfully.");
+
+                return dto; // Kembalikan DTO yang sudah ditambahkan
             }
-            else
+            catch (Exception ex)
             {
-                _context.Database.ExecuteSqlRaw("DBCC CHECKIDENT('[DSO.Shop.ConsignedShop]', RESEED, 0)");
-                _context.Database.ExecuteSqlRaw("DBCC CHECKIDENT('[DSO.Shop.Location]', RESEED, 0)");
-                dto.SetGeneralHandler();
+                // Log error jika terjadi pengecualian
+                Console.WriteLine($"Error while adding consigned shop: {ex.Message}");
+                return null; // Atau bisa mengembalikan objek DTO kosong/null jika terjadi kesalahan
             }
+        }
 
-            _context.CharacterConsignedShop.Add(dto);
-            _context.SaveChanges();
-
-
-
-
-
-            return dto;
+        public async Task UpdateConsignedShopBitsHandlerAsync(long bits)
+        {
+            var consignedShop = await _context.CharacterConsignedShop.FirstOrDefaultAsync();
+            if (consignedShop != null)
+            {
+                _context.CharacterConsignedShop.Update(consignedShop);
+                await _context.SaveChangesAsync();
+            }
         }
 
         public async Task<GuildDTO> AddGuildAsync(GuildModel guild)

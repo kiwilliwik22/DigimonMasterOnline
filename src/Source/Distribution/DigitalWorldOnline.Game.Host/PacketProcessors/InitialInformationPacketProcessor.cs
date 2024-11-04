@@ -1,4 +1,4 @@
-﻿using AutoMapper;
+using AutoMapper;
 using DigitalWorldOnline.Application;
 using DigitalWorldOnline.Application.Separar.Commands.Update;
 using DigitalWorldOnline.Application.Separar.Queries;

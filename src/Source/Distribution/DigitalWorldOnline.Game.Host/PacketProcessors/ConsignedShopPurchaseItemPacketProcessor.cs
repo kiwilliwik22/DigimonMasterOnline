@@ -115,6 +115,17 @@ namespace DigitalWorldOnline.Game.PacketProcessors
                 _logger.Information($"Removing consigned shop bought item...");
                 //newItem.ReduceAmount(boughtAmount);
                 seller.ConsignedShopItems.RemoveOrReduceItems(newItem.GetList());
+                _logger.Information($"Updating consigned shop item list...");
+                // After updating the seller's consigned shop items
+                await _sender.Send(new UpdateItemsCommand(seller.ConsignedShopItems.Items));
+
+                // Broadcast the updated items to the seller and other clients
+                _mapServer.BroadcastForTamerViewsAndSelf(client.TamerId, new ConsignedShopItemsViewPacket(shop, seller.ConsignedShopItems, seller.Name).Serialize());
+
+                // Log the update for debugging
+                _logger.Information($"Updated seller's consigned shop items for seller ID: {seller.Id}");                
+                await _sender.Send(new ConsignedShopByHandlerQuery(shopHandler));
+
                 client.Send(
                     new SystemMessagePacket($"Successfully bought {boughtItemId} x{boughtAmount} from Shop {shop}."));
                 _logger.Information($"Removing consigned shop bought item...");
@@ -154,13 +165,6 @@ namespace DigitalWorldOnline.Game.PacketProcessors
                 }
             }
 
-            _logger.Information($"Updating consigned shop item list...");
-                await _sender.Send(new UpdateItemsCommand(seller.ConsignedShopItems));
-                _mapServer.BroadcastForTamerViewsAndSelf(client.TamerId, new ConsignedShopItemsViewPacket(shop, seller.ConsignedShopItems, seller.Name).Serialize());
-                _logger.Information($"Updating {seller.Id} consigned shop items...");
-                await _sender.Send(new UpdateItemsCommand(client.Tamer.ConsignedShopItems.Items));
-                await _sender.Send(new UpdateItemsCommand(seller.ConsignedShopItems.Items));
-                await _sender.Send(new ConsignedShopByHandlerQuery(shopHandler));
             //var sellerClient = client.Server.FindByTamerId(shop.CharacterId);
             //if (sellerClient != null && sellerClient.IsConnected)
             //{
